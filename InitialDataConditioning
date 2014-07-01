@@ -1,0 +1,172 @@
+
+
+
+import time
+import h5py
+import sys
+import numpy as np
+import matplotlib.pyplot as plt
+from pylab import *
+import numexpr as ne
+import os
+import timeit
+
+np.set_printoptions(precision = 1)
+
+
+f = '/home/caio/Documents/plot data/data/Datalog - 2014 06 13, Fri, 02-21-01.h5'
+
+d = h5py.File(f,"r")
+
+"""
+allstartfreqs=d['Spectrum_Data'][:, 1]
+startfreqlist= list(set(allstartfreqs))
+
+#a quick way to plot the samples of the first starting frequency
+
+plt.plot((d['Spectrum_Data'][1,4:len(d['Spectrum_Data'][0,:])]), 'k--')
+
+i = 0
+while (allstartfreqs[i] == allstartfreqs[i+1]):
+
+	plt.plot((d['Spectrum_Data'][i,4:len(d['Spectrum_Data'][0,:])]))
+
+	i += 1
+
+
+#print((d['Spectrum_Data'][:,2:len(d['Spectrum_Data'][0,:])]))
+
+#print (i)
+"""
+
+def concatinate(directoryName):
+	"""Combines smaller datalogs into one larger one."""
+	
+
+
+def avgSamples(specData):
+	"""Averages samples that are taken for each frequency.
+	All values including saveTime, startFreq, binSize, and runningSumItems are averaged.
+	Input: the Spectrum_Data group from the hdf5 file.
+	Output: a two dimensional array that is similar in structure to the input, but with one spectrum per frequency change.
+	"""
+	startfreqlist= list(set(specData[:, 1]))
+	allStartFreqs = specData[:, 1]
+	newLength = len(specData[1, :])
+	dSet = np.zeros((len(allStartFreqs), newLength), dtype = np.float64)
+
+	indexOld = 0
+	indexNew = 0
+
+
+	while (indexOld < len(allStartFreqs)-1):
+
+		initial = indexOld
+		indexAvg = 0
+		
+		while (allStartFreqs[indexOld] == allStartFreqs[initial] and indexOld < (len(allStartFreqs)-1)):
+
+			#dSet[indexNew, ] += np.take(specData, indexOld, axis = 0) #specData[indexOld, ]
+			indexAvg += 1
+			indexOld += 1
+
+		dSet[indexNew, ] += np.average(specData[initial:(initial + indexAvg),], axis = 0)
+		dSet[indexNew, 3] *= indexAvg
+
+		indexNew += 1
+
+	return dSet[0:(indexNew), :]
+       
+def waveformGenerate(avgSpecData):
+	"""Creates a complete waveform for each sweep.
+	Assumes at least one continuous sweep has been completed in the data set.
+	All values including saveTime, startFreq, binSize, and runningSumItems are averaged.
+	Input: the averaged samples from avgSamples().
+	Output: a two dimensional array that provides a wavEform for each completed sweep
+	"""
+
+	minIndecies = np.ravel(np.asarray(np.where(avgSpecData[:, 1] == avgSpecData[:, 1].min())))
+	maxIndecies = np.ravel(np.asarray(np.where(avgSpecData[:, 1] == avgSpecData[:, 1].max())))
+	
+	waveSet = avgSpecData[:,4:len(avgSpecData[0,:])]
+
+	print(avgSpecData[:, 1])
+	print(minIndecies)
+	print(maxIndecies)
+	#print(waveSet.shape)
+	if(maxIndecies[0] > minIndecies[0]):
+		sweepWidth = minIndecies[1] - minIndecies[0]
+	else:
+		sweepWidth = minIndecies[1] - minIndecies[0] 
+
+		#print(sweepWidth-maxIndecies[0])
+		#print(minIndecies)
+		#print(maxIndecies)
+	waveSet = np.insert(waveSet, np.zeros(sweepWidth-minIndecies[0]), np.NAN, axis=0)
+	minIndecies += (sweepWidth-maxIndecies[0])
+	maxIndecies += (sweepWidth-maxIndecies[0])
+
+	#print(waveSet.shape)
+
+	if(max(minIndecies) > max(maxIndecies)):
+		trailingBufferSize = ((sweepWidth-((len(waveSet[:,0])-max(minIndecies)))), (len(waveSet[0,:])))
+		trailingBuffer = np.zeros(trailingBufferSize)
+		trailingBuffer[:] = np.NAN
+		waveSet = np.append(waveSet, trailingBuffer, axis=0)
+
+
+	sampleWidth = len(waveSet[0, :])
+	finalWidth = (((sweepWidth + 1)/2)*sampleWidth)
+
+	#print(waveSet.shape)
+	
+
+	sideBufferSize = (len(waveSet[:, 0]), finalWidth - sampleWidth)
+	sideBuffer = np.zeros(sideBufferSize)
+	sideBuffer[:] = np.NAN
+	#print(sideBuffer.shape)
+	#print('after addition')
+	waveSet = np.append(waveSet, sideBuffer, axis = 1)
+
+	#print(waveSet.shape)
+	foldTuple = ((len(waveSet[:,0])/sweepWidth), (sweepWidth), (len(waveSet[0,:])))
+	#print(foldTuple)
+	waveSet = np.resize(waveSet, foldTuple)
+	
+	#print(waveSet.shape)
+	#print(waveSet)
+	plt.plot((waveSet[2,0,:]))
+	for i in range(1,sweepWidth- 1):
+		waveSet[:,i:,:] = np.roll(waveSet[:,i:,:], (sampleWidth)/2, axis = 2)
+		plt.plot((waveSet[2,i,:]))
+
+	waveSet = np.nanmean(waveSet, axis = 1)
+
+
+	
+	print(waveSet.shape)
+	#plt.imshow(waveSet,interpolation='nearest', cmap=cm.gist_rainbow, vmin=abs(waveSet).min(), vmax=abs(waveSet).max())
+	plt.plot((waveSet[2,:]), 'k--')
+	##print(waveSet)
+	
+	
+	##print(sweepWidth)
+	##print(waveSet)
+
+
+
+newSet = avgSamples(d['Spectrum_Data'])
+
+SpectroGraph = waveformGenerate(newSet)
+
+##print (min (allstartfreqs))
+
+
+
+
+
+#plt.plot((newSet[0,4:len(newSet[0,:])]), 'r-')
+
+plt.show()
+
+##print (newSet[:,2:len(newSet[0,:])])
